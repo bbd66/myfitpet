@@ -43,10 +43,17 @@
       </div>
     </div>
 
-    <!-- 宠物展示区 -->
+    <!-- 宠物展示区：替换为 Live2D 模型 -->
     <div class="pet-display">
       <div class="pet-avatar" @click="testClick">
-        <img :src="pet.avatar" :alt="pet.name" class="pet-image" />
+          <Live2DWidget
+            jsonPath="/live2d/cat-white/model.json"
+            :width="300"
+            :height="300"
+            :vOffset="60"
+            @click="testClick"
+            @ready="onLive2DReady"
+          />
       </div>
     </div>
     
@@ -79,6 +86,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import Live2DWidget from '@/components/Live2DWidget.vue'
 import { useRouter } from 'vue-router'
 import { usePetStore } from '@/stores/pet'
 // 导入图标
@@ -121,6 +129,11 @@ const fetchNewQuote = () => {
 const testClick = () => {
   console.log('测试点击事件被触发');
   fetchNewQuote();
+}
+
+// Live2D 初始化完成回调
+const onLive2DReady = () => {
+  console.log('Live2D whitecat 模型已就绪');
 }
 
 // 页面加载时不再自动获取新的励志语录
