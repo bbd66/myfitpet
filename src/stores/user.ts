@@ -7,10 +7,12 @@ export const useUserStore = defineStore('user', () => {
     id: '1',
     username: '运动达人',
     avatar: '👤',
-    email: 'user@petfit.com',
+    email: 'user@fitpet.com',
     createdAt: new Date().toISOString()
   })
 
+  const coins = ref<number>(1000) // 初始金币数
+  
   const isLoggedIn = ref(true)
 
   const login = async (email: string, password: string) => {
@@ -22,10 +24,25 @@ export const useUserStore = defineStore('user', () => {
     isLoggedIn.value = false
   }
 
+  const addCoins = (amount: number) => {//增加金币
+    coins.value += amount
+  }
+
+  const deductCoins = (amount: number) => {//减少金币
+    if (coins.value >= amount) {
+      coins.value -= amount
+      return true
+    }
+    return false
+  }
+  
   return {
     user,
+    coins,
     isLoggedIn,
     login,
-    logout
+    logout,
+    addCoins,
+    deductCoins
   }
 })
