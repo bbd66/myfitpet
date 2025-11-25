@@ -5,6 +5,10 @@
         <img :src="backIcon" alt="返回" class="back-icon" />
       </button>
       <h1>宠物商城</h1>
+      <div class="coins-display">
+        <span class="coins-text">金币:</span>
+        <span class="coins-amount">{{ coins }}</span>
+      </div>
     </header>
     
     <div class="shop-content">
@@ -31,6 +35,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useUserStore } from '@/stores/user'
 import fishIcon from '@/图标/果冻.png?url'
 import juiceIcon from '@/图标/果汁.png?url'
 import clothesIcon from '@/图标/衣服.png?url'
@@ -49,6 +54,8 @@ interface Product {
 }
 
 const router = useRouter()
+const userStore = useUserStore()
+const coins = computed(() => userStore.coins)
 
 const products = ref<Product[]>([
   { id: 1, name: '果冻', price: 50, image: fishIcon },
@@ -64,8 +71,14 @@ const goBack = () => {
 }
 
 const purchaseProduct = (product: Product) => {
-  alert(`你购买了 ${product.name}，价格：${product.price} 金币`)
-  // 这里可以添加实际的购买逻辑
+  if (userStore.coins >= product.price) {
+    if (userStore.deductCoins(product.price)) {
+      alert(`购买成功！你购买了 ${product.name}，花费：${product.price} 金币`)
+      // 这里可以添加实际的购买逻辑
+    }
+  } else {
+    alert(`金币不足！你需要 ${product.price} 金币，但你只有 ${userStore.coins} 金币`)
+  }
 }
 </script>
 
@@ -93,6 +106,7 @@ const purchaseProduct = (product: Product) => {
   justify-content: center;
   gap: 10px;
   margin-bottom: 30px;
+  padding: 0 10px;
   
   .back-btn {
     background: none;
@@ -111,9 +125,31 @@ const purchaseProduct = (product: Product) => {
     font-size: 28px;
     font-weight: bold;
     margin: 0;
+    flex: 1;
+    text-align: center;
+  }
+
+  .coins-display {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 8px 12px;
+    border-radius: 20px;
+    
+    .coins-text {
+      color: white;
+      font-size: 14px;
+    }
+    
+    .coins-amount {
+      color: #FFD700;
+      font-weight: bold;
+      font-size: 16px;
+    }
   }
 }
-
+  
 .shop-content {
   .product-grid {
     display: grid;
