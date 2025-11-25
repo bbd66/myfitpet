@@ -55,6 +55,40 @@
         </div>
       </div>
     </div>
+
+        <!-- 摄像头权限确认弹窗 -->
+    <div v-if="showCameraConfirm" class="camera-confirm-modal">
+      <div class="modal-content">
+        <h3>摄像头权限请求</h3>
+        <p>为了使用瑜伽垫的视觉识别功能，需要打开摄像头。是否允许访问摄像头？</p>
+        <div class="modal-actions">
+          <button @click="cancelCameraAccess" class="cancel-btn">取消</button>
+          <button @click="confirmCameraAccess" class="confirm-btn">确认</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 摄像头预览 -->
+    <div v-if="showCameraPreview" class="camera-preview-modal">
+      <div class="preview-content">
+        <h3>摄像头预览</h3>
+        <div class="camera-controls">
+          <button @click="switchCamera" class="switch-camera-btn">
+            切换摄像头 ({{ currentCamera === 'user' ? '前置' : '后置' }})
+          </button>
+        </div>
+        <video 
+          ref="videoElement" 
+          autoplay 
+          playsinline 
+          class="camera-video"
+          :class="{ 'full-screen': isMobile }"
+        ></video>
+        <div class="preview-actions">
+          <button @click="closeCameraPreview" class="close-btn">关闭摄像头</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -70,7 +104,13 @@ import scanDeviceIcon from '@/图标/扫描设备.png?url'
 
 const scanning = ref(false)
 const connectedDevice = ref<BluetoothDevice | null>(null)
-
+const showCameraConfirm = ref(false)
+const showCameraPreview = ref(false)
+const videoElement = ref<HTMLVideoElement | null>(null)
+const stream = ref<MediaStream | null>(null)
+const isMobile = ref(false)
+const currentCamera = ref<'user' | 'environment'>('environment')
+  
 const devices = ref<BluetoothDevice[]>([
   { id: '1', name: '智能跳绳', type: '跳绳', connected: false, battery: 85, icon: jumpRopeIcon },
   { id: '2', name: '动作视觉识别瑜伽垫', type: '智能瑜伽垫', connected: false, battery: 92, icon: yogaMatIcon },
@@ -89,10 +129,104 @@ const toggleConnection = (device: BluetoothDevice) => {
   device.connected = !device.connected
   if (device.connected) {
     connectedDevice.value = device
+    // 如果是瑜伽垫，显示摄像头权限确认弹窗
+    if (device.type === '智能瑜伽垫') {
+      showCameraConfirm.value = true
+    }
   } else if (connectedDevice.value?.id === device.id) {
     connectedDevice.value = null
   }
 }
+
+const cancelCameraAccess = () => {
+  showCameraConfirm.value = false
+  // 断开瑜伽垫连接
+  if (connectedDevice.value?.type === '智能瑜伽垫') {
+    const yogaMat = devices.value.find(d => d.type === '智能瑜伽垫')
+    if (yogaMat) {
+      yogaMat.connected = false
+      connectedDevice.value = null
+    }
+  }
+}
+
+const confirmCameraAccess = async () => {
+  showCameraConfirm.value = false
+  try {
+    // 检查是否为移动设备
+    isMobile.value = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    
+    // 请求摄像头权限
+    stream.value = await navigator.mediaDevices.getUserMedia({ 
+      video: { 
+        facingMode: currentCamera.value 
+      } 
+    })
+    showCameraPreview.value = true
+    
+    // 在下一帧更新后设置视频源
+    await nextTick()
+    if (videoElement.value) {
+      videoElement.value.srcObject = stream.value
+    }
+  } catch (error) {
+    console.error('无法访问摄像头:', error)
+    alert('无法访问摄像头，请检查权限设置')
+    // 如果摄像头访问失败，断开瑜伽垫连接
+    const yogaMat = devices.value.find(d => d.type === '智能瑜伽垫')
+    if (yogaMat) {
+      yogaMat.connected = false
+      connectedDevice.value = null
+    }
+  }
+}
+
+const switchCamera = async () => {
+  if (!stream.value) return
+  
+  try {
+    // 停止当前流
+    stream.value.getTracks().forEach(track => track.stop())
+    
+    // 切换摄像头类型
+    currentCamera.value = currentCamera.value === 'user' ? 'environment' : 'user'
+    
+    // 请求新的摄像头流
+    stream.value = await navigator.mediaDevices.getUserMedia({ 
+      video: { 
+        facingMode: currentCamera.value 
+      } 
+    })
+    
+    // 更新视频源
+    if (videoElement.value) {
+      videoElement.value.srcObject = stream.value
+    }
+  } catch (error) {
+    console.error('切换摄像头失败:', error)
+    alert('切换摄像头失败')
+    // 切换回原来的摄像头类型
+    currentCamera.value = currentCamera.value === 'user' ? 'environment' : 'user'
+  }
+}
+
+const closeCameraPreview = () => {
+  showCameraPreview.value = false
+  if (stream.value) {
+    stream.value.getTracks().forEach(track => track.stop())
+    stream.value = null
+  }
+  if (videoElement.value) {
+    videoElement.value.srcObject = null
+  }
+}
+
+// 组件卸载前清理资源
+onBeforeUnmount(() => {
+  if (stream.value) {
+    stream.value.getTracks().forEach(track => track.stop())
+  }
+})
 </script>
 
 <style scoped lang="scss">
@@ -383,6 +517,186 @@ const toggleConnection = (device: BluetoothDevice) => {
       
       &.empty-hint {
         font-size: 12px;
+      }
+    }
+  }
+}
+.camera-confirm-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  
+  .modal-content {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
+    
+    // 深色主题
+    body.dark-theme & {
+      background: #333;
+    }
+    
+    h3 {
+      color: #333;
+      margin-bottom: 16px;
+      
+      // 深色主题
+      body.dark-theme & {
+        color: #f0f0f0;
+      }
+    }
+    
+    p {
+      color: #666;
+      margin-bottom: 24px;
+      line-height: 1.5;
+      
+      // 深色主题
+      body.dark-theme & {
+        color: #ccc;
+      }
+    }
+    
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      
+      button {
+        padding: 10px 24px;
+        border-radius: 8px;
+        font-size: 16px;
+        cursor: pointer;
+        border: none;
+        transition: all 0.3s;
+      }
+      
+      .cancel-btn {
+        background: #f0f0f0;
+        color: #666;
+        
+        // 深色主题
+        body.dark-theme & {
+          background: #444;
+          color: #ccc;
+        }
+        
+        &:hover {
+          background: #e0e0e0;
+          
+          // 深色主题
+          body.dark-theme & {
+            background: #555;
+          }
+        }
+      }
+      
+      .confirm-btn {
+        background: #8FAADC;
+        color: white;
+        
+        // 深色主题
+        body.dark-theme & {
+          background: #F08713;
+        }
+        
+        &:hover {
+          background: #7d9bc9;
+          
+          // 深色主题
+          body.dark-theme & {
+            background: #e07a0f;
+          }
+        }
+      }
+    }
+  }
+}
+
+.camera-preview-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  
+  .preview-content {
+    width: 90%;
+    max-width: 600px;
+    text-align: center;
+    
+    h3 {
+      color: white;
+      margin-bottom: 16px;
+    }
+    
+    .camera-controls {
+      margin-bottom: 10px;
+      
+      .switch-camera-btn {
+        padding: 8px 16px;
+        background: #8FAADC;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+        cursor: pointer;
+        
+        &:hover {
+          background: #7d9bc9;
+        }
+      }
+    }
+    
+    .camera-video {
+      width: 100%;
+      max-height: 70vh;
+      background: black;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      
+      &.full-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        max-height: none;
+        border-radius: 0;
+        object-fit: cover;
+        z-index: 1001;
+      }
+    }
+    
+    .preview-actions {
+      .close-btn {
+        padding: 12px 32px;
+        background: #ff4757;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        cursor: pointer;
+        transition: all 0.3s;
+        
+        &:hover {
+          background: #ff2e43;
+        }
       }
     }
   }
